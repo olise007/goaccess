@@ -1,6 +1,12 @@
 GoAccess [![C build](https://github.com/allinurl/goaccess/actions/workflows/build-test.yml/badge.svg)](https://github.com/allinurl/goaccess/actions/workflows/build-test.yml) [![GoAccess](https://goaccess.io/badge)](https://goaccess.io)
 ========
 
+## Imaorise fork: native date reports
+
+This fork adds compact **Live / Today / Yesterday / Last 7 days / Last 30 days / Custom range**
+controls directly to the GoAccess dashboard, including theme support and an optional
+private report-generation service. See [setup, API, retention and tests](deploy/date-reports/README.md).
+
 ## What is it? ##
 GoAccess is an open source, real-time web log analyzer and interactive viewer
 that runs in a terminal on *nix systems or directly in your browser. Designed

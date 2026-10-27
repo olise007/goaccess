@@ -1844,3 +1844,28 @@ html.dark.purple::-webkit-scrollbar-thumb:hover,
 .nav-list li .toggle-panel {
 	margin-left: auto;
 }
+
+/* Native date toolbar inherits the selected GoAccess theme and header layout. */
+.date-range-controls { flex: 1 0 100%; font-size: 12px; margin: 0 0 8px; }
+.date-range-form, .date-range-custom, .date-range-custom label, .date-range-info { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; }
+.date-range-form label { margin: 0; font-weight: normal; }
+.date-range-form input, .date-range-form select { font: inherit; border: 1px solid #cbd5e1; border-radius: 4px; padding: 5px 8px; min-height: 30px; color: inherit; background: transparent; }
+.date-range-form button { font-size: 12px; min-height: 30px; padding: 5px 12px; }
+.date-range-zone { font-size: 11px; opacity: .7; white-space: nowrap; }
+.date-range-info { font-size: 11px; margin-top: 5px; align-items: baseline; }
+.date-range-info details { flex: 1; min-width: 130px; }
+.date-range-info summary { cursor: pointer; width: fit-content; opacity: .8; }
+.date-range-info p { margin: 4px 0 0; }
+.date-range-controls [hidden] { display: none !important; }
+.date-range-controls :focus-visible { outline: 2px solid #38bdf8; outline-offset: 2px; }
+.date-range-controls button:disabled { opacity: .6; cursor: wait; }
+.date-range-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+.dark .date-range-form select, .dark .date-range-form input { background: #242a35; color: #e2e8f0; border-color: #5c6572; color-scheme: dark; }
+.dark .date-range-form button { background: #354153; color: #e2e8f0; border-color: #5c6572; }
+@media (max-width: 767px) {
+  .date-range-form { gap: 6px; }
+  .date-range-custom { order: 4; flex: 1 0 100%; }
+  .date-range-custom label { flex: 1 1 130px; flex-wrap: nowrap; min-width: 0; }
+  .date-range-custom input { width: 100%; min-width: 0; }
+  .date-range-controls { margin-bottom: 4px; }
+}

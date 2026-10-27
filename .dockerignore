@@ -1,0 +1,6 @@
+.git
+**/__pycache__
+**/*.pyc
+**/apache
+**/geoip
+**/node_modules

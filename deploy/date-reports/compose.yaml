@@ -1,0 +1,21 @@
+# Standalone deployment: keep logs read-only and bind only a trusted interface.
+services:
+  goaccess:
+    image: goaccess-imaorise:date-reports
+    build:
+      context: ../..
+      dockerfile: deploy/date-reports/Dockerfile
+    restart: unless-stopped
+    environment:
+      WS_URL: ${GOACCESS_WS_URL:-127.0.0.1:7890}
+    ports:
+      - '${MONITOR_BIND:-127.0.0.1}:7891:80'
+      - '${MONITOR_BIND:-127.0.0.1}:7890:7890'
+    volumes:
+      - '${GOACCESS_LOG_DIR:?Set GOACCESS_LOG_DIR to the Apache log directory}:/var/log/apache2:ro'
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO /dev/null http://127.0.0.1/api/health && wget -qO /dev/null http://127.0.0.1/live.html']
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3

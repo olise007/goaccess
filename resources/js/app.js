@@ -2499,3 +2499,130 @@ window.onload = function () {
 	});
 };
 }());
+
+/**
+ * Native date reporting for deployments running deploy/date-reports/server.py.
+ * Ordinary standalone GoAccess reports remain unchanged when that API is absent.
+ * Historical navigation loads a freshly generated report, so live WebSocket
+ * updates cannot overwrite the selected period or mix its panels with live data.
+ */
+(function () {
+  'use strict';
+
+  /** Read the private same-origin API, surfacing bounded user-facing errors. */
+  async function dateRequest(path, options) {
+    const response = await fetch(path, {...options, cache: 'no-store'});
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Unable to load report.');
+    return result;
+  }
+
+  /** Mount one compact toolbar inside the native header after capability discovery. */
+  async function initializeDateReports() {
+    if (!/^https?:$/.test(location.protocol)) return;
+    let health;
+    try {
+      health = await dateRequest('/api/health', {signal: AbortSignal.timeout(5000)});
+      if (health.dateReports !== true) return;
+    } catch (_) {
+      return;
+    }
+    const header = document.querySelector('.page-header');
+    if (!header || document.querySelector('#date-range-controls')) return;
+    const controls = document.createElement('section');
+    controls.id = 'date-range-controls';
+    controls.className = 'date-range-controls';
+    controls.setAttribute('aria-label', 'Report period');
+    controls.innerHTML = '<form class="date-range-form">' +
+      '<label><span class="date-range-sr-only">Period</span><select name="period" aria-label="Report period">' +
+      '<option value="live">Live</option><option value="today">Today</option><option value="yesterday">Yesterday</option>' +
+      '<option value="7days">Last 7 days</option><option value="30days">Last 30 days</option><option value="custom">Custom range</option></select></label>' +
+      '<div class="date-range-custom" hidden><label>From <input name="start" type="date"></label>' +
+      '<label>To <input name="end" type="date"></label></div><button type="submit" class="btn btn-default">View</button>' +
+      '<span class="date-range-zone">Nigeria · WAT</span></form>' +
+      '<div class="date-range-info"><span role="status" aria-live="polite">Live · updates automatically</span>' +
+      '<details><summary>History &amp; refresh</summary><p>Dates use Africa/Lagos. Historical snapshots are cached for five minutes.</p></details></div>';
+    header.append(controls);
+    const form = controls.querySelector('form');
+    const period = form.elements.period;
+    const custom = controls.querySelector('.date-range-custom');
+    const status = controls.querySelector('[role="status"]');
+    const coverage = controls.querySelector('details p');
+    const button = controls.querySelector('button');
+    const today = new Intl.DateTimeFormat('en-CA', {timeZone: 'Africa/Lagos', year: 'numeric', month: '2-digit', day: '2-digit'}).format(new Date());
+    const minimum = new Date(today + 'T12:00:00Z');
+    minimum.setUTCDate(minimum.getUTCDate() - 29);
+    const params = new URLSearchParams(location.search);
+    for (const input of custom.querySelectorAll('input')) {
+      input.min = minimum.toISOString().slice(0, 10);
+      input.max = today;
+      input.value = params.get(input.name) || today;
+    }
+    period.value = params.get('period') || 'live';
+    if (!period.value) period.value = 'live';
+
+    /** Keep date inputs required only when the custom period is selected. */
+    function updateDates() {
+      custom.hidden = period.value !== 'custom';
+      for (const input of custom.querySelectorAll('input')) input.required = !custom.hidden;
+    }
+
+    /** Describe coverage without claiming that missing historical data was recovered. */
+    function describe(result) {
+      status.textContent = result.status === 'empty' ? 'No requests found for this period.' :
+        result.count.toLocaleString() + ' requests · ' + result.start + ' – ' + result.end;
+      const format = (value) => value ? new Date(value).toLocaleString('en-GB', {timeZone: 'Africa/Lagos'}) : 'none';
+      coverage.textContent = 'Available log timestamps: ' + format(result.availableFrom) + ' – ' + format(result.availableThrough) +
+        ' (Nigeria time). ' + (result.incomplete ? 'Incomplete history: requested dates begin before available logs. ' : '') +
+        'Snapshot: ' + format(result.generatedAt) + '. Cached for five minutes.';
+    }
+
+    period.addEventListener('change', updateDates);
+    updateDates();
+    if (health.lowDisk) status.textContent = 'Low disk space: historical generation paused.';
+    if (params.has('report')) {
+      try {
+        const existing = await dateRequest('/api/reports/' + encodeURIComponent(params.get('report')));
+        if (existing.status === 'ready' || existing.status === 'empty') describe(existing);
+      } catch (_) {
+        status.textContent = 'Historical snapshot · select View to refresh.';
+      }
+    }
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (period.value === 'live') {
+        location.assign('/live.html');
+        return;
+      }
+      button.disabled = true;
+      period.disabled = true;
+      status.textContent = 'Generating report… Current dashboard remains available.';
+      try {
+        const selection = {period: period.value, start: form.elements.start.value, end: form.elements.end.value};
+        let result = await dateRequest('/api/reports', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(selection)});
+        const id = result.id;
+        const deadline = Date.now() + 240000;
+        while (result.status === 'loading') {
+          if (Date.now() > deadline) throw new Error('Generation is taking longer than expected. Select View to check again.');
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+          result = await dateRequest('/api/reports/' + id);
+        }
+        if (result.status === 'error') throw new Error(result.error);
+        if (result.status === 'empty') {
+          describe(result);
+          status.textContent += ' Previous dashboard remains displayed.';
+        } else {
+          const query = new URLSearchParams({...selection, report: id, generated: result.generatedAt});
+          location.assign(result.url + '?' + query);
+        }
+      } catch (error) {
+        status.textContent = error.message;
+      } finally {
+        button.disabled = false;
+        period.disabled = false;
+      }
+    });
+  }
+
+  window.addEventListener('load', initializeDateReports);
+}());

@@ -113,3 +113,7 @@ Makefile.in
 /resources/countries-110m.json.tmp
 /resources/cities-10m.json.tmp
 /resources/js/topojson.v3.min.js.tmp
+
+# Optional date-report service test caches
+__pycache__/
+*.pyc
