@@ -106,6 +106,19 @@ class ReportsTest(unittest.TestCase):
         self.assertEqual(data['visitors']['data'][0]['data'], '20261027')
         self.assertEqual(data['general']['total_requests'], 1)
 
+    @unittest.skipUnless(shutil.which('goaccess'), 'Requires the compiled GoAccess binary')
+    def test_long_request_is_counted_once(self):
+        """Dynamic line buffers must not split long real requests into phantom failures."""
+        source = self.logs / 'long.log'
+        source.write_bytes(line('26/Oct/2026:23:00:00 +0000').replace(b'"test"', b'"' + b'a' * 5000 + b'"'))
+        output = Path(self.temp.name) / 'long.json'
+        subprocess.run(['goaccess', str(source), '--log-format=%h %^[%x] "%r" %s %b "%R" "%u"',
+                        '--datetime-format=%d/%b/%Y:%H:%M:%S %z', '--tz=Africa/Lagos',
+                        '--no-progress', '--output=' + str(output)], check=True, capture_output=True)
+        data = json.loads(output.read_text())
+        self.assertEqual(data['general']['total_requests'], 1)
+        self.assertEqual(data['general']['failed_requests'], 0)
+
     def test_snapshot_cutoff_and_inclusive_custom_dates(self):
         """The selected last day is inclusive, but requests after capture are excluded."""
         day = dt.date(2026, 10, 27)
@@ -140,6 +153,12 @@ class ReportsTest(unittest.TestCase):
                 post('yesterday')
             self.assertEqual(context.exception.code, 429)
             context.exception.close()
+        for headers, expected in [({'Content-Type': 'text/plain'}, 415),
+                                  ({'Content-Type': 'application/json', 'Origin': 'https://untrusted.example'}, 403)]:
+            with self.assertRaises(urllib.error.HTTPError) as rejected:
+                urllib.request.urlopen(urllib.request.Request(url, b'{"period":"today"}', headers))
+            self.assertEqual(rejected.exception.code, expected)
+            rejected.exception.close()
         r.STATE.clear()
 
 

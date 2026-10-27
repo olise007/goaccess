@@ -22,7 +22,9 @@ The service has no application login: keep it on loopback or a trusted private
 network, or put authenticated access in front of both HTTP and WebSocket ports.
 Never publish the raw log directory. Source logs are mounted read-only.
 
-The Dockerfile compiles this repository, rather than installing stock GoAccess.
+The Dockerfile compiles this repository with `--with-getline`, rather than installing stock GoAccess.
+Dynamic line buffers prevent requests longer than 4 KB from becoming multiple
+failed records.
 To build only the CLI, use the upstream build instructions in the root README;
 the native UI code is embedded by the existing asset-generation process.
 
