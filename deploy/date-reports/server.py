@@ -19,6 +19,7 @@ from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from zoneinfo import ZoneInfo
 from urllib.parse import urlsplit
+from traffic import is_internal
 
 LAGOS = ZoneInfo('Africa/Lagos')
 STAMP = re.compile(rb'\[([^]]+)\]')
@@ -63,16 +64,18 @@ def sources():
                   if re.fullmatch(r'laravel_access\.log(?:\.\d+(?:\.gz)?|-\d{8}(?:\.gz)?)?', p.name))
 
 
-def filter_logs(start, end, output, cutoff=None):
+def filter_logs(start, end, output, cutoff=None, statistics=None):
     """Copy a stable log snapshot, retrying rename/truncate races without deduping hits.
 
     Each file is read only to its initial size. Appends are allowed; changes to
     archive membership, inode replacement, or truncation invalidate the snapshot.
-    Identical legitimate requests are deliberately preserved.
+    Identical legitimate requests are deliberately preserved. Internal source
+    records remain in the audit logs but are omitted from report snapshots.
     """
     cutoff = cutoff or dt.datetime.now(LAGOS)
     for attempt in range(3):
         count, earliest, latest = 0, None, None
+        excluded_internal = 0
         paths = sources()
         signatures = {}
         try:
@@ -100,6 +103,10 @@ def filter_logs(start, end, output, cutoff=None):
                             earliest = stamp if earliest is None else min(earliest, stamp)
                             latest = stamp if latest is None else max(latest, stamp)
                             if start <= stamp.date() <= end:
+                                address = line.split(None, 1)[0].decode('ascii', errors='replace')
+                                if is_internal(address):
+                                    excluded_internal += 1
+                                    continue
                                 target.write(line)
                                 count += 1
             if paths != sources():
@@ -108,6 +115,8 @@ def filter_logs(start, end, output, cutoff=None):
                 stat = p.stat()
                 if stat.st_ino != inode or stat.st_size < size:
                     raise OSError('A source log rotated or was truncated.')
+            if statistics is not None:
+                statistics['excludedInternal'] = excluded_internal
             return count, earliest, latest
         except (OSError, EOFError):
             if attempt == 2:
@@ -124,9 +133,11 @@ def generate(key, start, end):
         with tempfile.TemporaryDirectory(prefix='.work-', dir=REPORTS) as work:
             work = Path(work)
             cutoff = dt.datetime.now(LAGOS)
-            count, earliest, latest = filter_logs(start, end, work / 'input.log', cutoff)
+            statistics = {}
+            count, earliest, latest = filter_logs(start, end, work / 'input.log', cutoff, statistics)
             result = {'status': 'empty' if count == 0 else 'ready', 'count': count,
                       'generatedAt': cutoff.isoformat(), 'start': str(start), 'end': str(end),
+                      'trafficScope': 'external', **statistics,
                       'availableFrom': earliest.isoformat() if earliest else None,
                       'availableThrough': latest.isoformat() if latest else None,
                       'incomplete': earliest is None or earliest > dt.datetime.combine(start, dt.time(), LAGOS)}
@@ -172,7 +183,7 @@ class Handler(BaseHTTPRequestHandler):
         """Return task state or lightweight service and storage health."""
         if self.path == '/api/health':
             free = shutil.disk_usage(LOGS).free
-            self.reply(200, {'status': 'ok', 'timezone': 'Africa/Lagos', 'dateReports': True, 'lowDisk': free < 1024 ** 3})
+            self.reply(200, {'status': 'ok', 'timezone': 'Africa/Lagos', 'dateReports': True, 'trafficScope': 'external', 'lowDisk': free < 1024 ** 3})
             return
         key = self.path.removeprefix('/api/reports/')
         with LOCK:

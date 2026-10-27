@@ -7,6 +7,13 @@ controls appear only when the same-origin reporting API advertises support.
 
 ## Build and run
 
+Live expects an Apache external-only log named `laravel_external_access.log`.
+For OCI, install the audited `oci-apache.conf` after reviewing the pinned tunnel
+address; it preserves `laravel_access.log` as the full audit log and writes a
+second log excluding internal sources. The shared CIDR policy is in `traffic.py`.
+When using another pre-filtered filename, set `GOACCESS_LIVE_LOG` to its path
+inside the container. Do not point Live at an unfiltered audit log.
+
 From this repository root:
 
 ```sh
@@ -30,7 +37,12 @@ the native UI code is embedded by the existing asset-generation process.
 
 ## Period semantics and API
 
-- Live reads the current access log and uses the normal GoAccess WebSocket.
+- Live reads the current external-only access log and uses the normal GoAccess WebSocket.
+- Historical snapshots filter the full audit log by effective client IP, excluding
+  loopback, RFC1918, shared/Tailscale, link-local and IPv6 ULA sources. Public bots
+  and curl clients remain visible. Metadata includes `trafficScope: external` and
+  `excludedInternal`. Older private tunnel-IP records cannot be recovered.
+- Full audit records, including health checks, remain available in the source logs.
 - Today and Yesterday use Africa/Lagos calendar days. Last 7/30 days include
   today and the preceding 6/29 days. Custom dates include both end days.
 - `POST /api/reports` accepts JSON `{ "period": "today" }`, or
@@ -64,7 +76,7 @@ midnight. The entrypoint and snapshot service both use the explicit format.
 ## Retention and resource limits
 
 `logrotate.conf` is the OCI policy template: access logs rotate daily with
-30 compressed archives, independently of the previous error-log size policy.
+30 compressed archives for both audit and external logs, independently of the previous error-log size policy.
 Install it as root-owned mode 0644 at `/etc/logrotate.d/rms-monitoring`, after
 backing up the existing policy. Inspect `logrotate --debug` first; do not force
 production rotation as a test. The host's enabled daily timer applies it.
@@ -75,6 +87,8 @@ OCI's existing records began on 18 October 2026. Earlier history is unavailable;
 the UI labels a request starting before the earliest record as incomplete.
 The initial measured 246,986,923 uncompressed bytes over 8.25 days project to
 about 898 MB for 30 days before compression, compared with about 17 GB free.
+The separate external-only live log adds up to another copy of external traffic;
+budget roughly 1.8 GB uncompressed at that measured rate before compression.
 Actual growth can change. The API warns and pauses generation below 1 GiB free
 on either the source-log or report filesystem; it never deletes source logs to
 make room. Each job needs temporary space for its selected uncompressed records

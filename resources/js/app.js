@@ -2539,7 +2539,7 @@ window.onload = function () {
       '<option value="7days">Last 7 days</option><option value="30days">Last 30 days</option><option value="custom">Custom range</option></select></label>' +
       '<div class="date-range-custom" hidden><label>From <input name="start" type="date"></label>' +
       '<label>To <input name="end" type="date"></label></div><button type="submit" class="btn btn-default">View</button>' +
-      '<span class="date-range-zone">Nigeria · WAT</span></form>' +
+      '<span class="date-range-zone">Nigeria · WAT · External traffic</span></form>' +
       '<div class="date-range-info"><span role="status" aria-live="polite">Live · updates automatically</span>' +
       '<details><summary>History &amp; refresh</summary><p>Dates use Africa/Lagos. Historical snapshots are cached for five minutes.</p></details></div>';
     header.append(controls);
@@ -2574,7 +2574,9 @@ window.onload = function () {
       const format = (value) => value ? new Date(value).toLocaleString('en-GB', {timeZone: 'Africa/Lagos'}) : 'none';
       coverage.textContent = 'Available log timestamps: ' + format(result.availableFrom) + ' – ' + format(result.availableThrough) +
         ' (Nigeria time). ' + (result.incomplete ? 'Incomplete history: requested dates begin before available logs. ' : '') +
-        'Snapshot: ' + format(result.generatedAt) + '. Cached for five minutes.';
+        'Snapshot: ' + format(result.generatedAt) + '. Cached for five minutes. ' +
+        (result.excludedInternal || 0).toLocaleString() + ' internal/private-source records excluded. ' +
+        'Older records logged under a private tunnel IP cannot be attributed or recovered.';
     }
 
     period.addEventListener('change', updateDates);

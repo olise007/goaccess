@@ -4,6 +4,7 @@ import gzip
 import importlib.util
 from pathlib import Path
 import tempfile
+import sys
 import shutil
 import subprocess
 import unittest
@@ -13,14 +14,15 @@ import urllib.request
 import urllib.error
 from unittest.mock import patch
 
+sys.path.insert(0, str(Path(__file__).parents[1]))
 spec = importlib.util.spec_from_file_location('reports', Path(__file__).parents[1] / 'server.py')
 r = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(r)
 
 
-def line(stamp):
+def line(stamp, address='203.0.113.10'):
     """Return a valid combined-log fixture with a caller-controlled timestamp."""
-    return f'127.0.0.1 - - [{stamp}] "GET / HTTP/1.1" 200 10 "-" "test"\n'.encode()
+    return f'{address} - - [{stamp}] "GET / HTTP/1.1" 200 10 "-" "test"\n'.encode()
 
 
 class ReportsTest(unittest.TestCase):
@@ -60,6 +62,26 @@ class ReportsTest(unittest.TestCase):
         self.assertEqual(count, 3)
         self.assertEqual(earliest.date(), dt.date(2026, 10, 26))
         self.assertEqual(len(self.output.read_bytes().splitlines()), 3)
+
+    def test_internal_policy_and_external_clients(self):
+        """Drop internal IPv4/IPv6 sources while retaining public bots/curl clients."""
+        from traffic import is_internal
+        for address in ['127.0.0.1', '10.1.2.3', '172.28.0.8', '192.168.1.2',
+                        '100.124.91.34', '169.254.1.1', '::1', 'fd00::1', 'fe80::1',
+                        '::ffff:127.0.0.1']:
+            self.assertTrue(is_internal(address), address)
+        for address in ['1.1.1.1', '8.8.8.8', '2606:4700:4700::1111', '203.0.113.10']:
+            self.assertFalse(is_internal(address), address)
+        day = dt.date(2026, 10, 27)
+        stamp = '27/Oct/2026:01:00:00 +0000'
+        source = b''.join(line(stamp, ip) for ip in ['127.0.0.1', '172.28.0.8', '::1', '203.0.113.10'])
+        source += line(stamp, '1.1.1.1').replace(b'"test"', b'"curl/8.18.0"')
+        (self.logs / 'laravel_access.log').write_bytes(source)
+        statistics = {}
+        count, _, _ = r.filter_logs(day, day, self.output, dt.datetime(2026, 10, 28, tzinfo=r.LAGOS), statistics)
+        self.assertEqual(count, 2)
+        self.assertEqual(statistics['excludedInternal'], 3)
+        self.assertIn(b'curl/8.18.0', self.output.read_bytes())
 
     def test_missing_archive_retries(self):
         """A disappearing archive retries rather than returning partial success."""

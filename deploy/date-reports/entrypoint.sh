@@ -1,7 +1,7 @@
 #!/bin/sh
 # Supervise the live parser, snapshot API and nginx as one monitoring service.
 set -eu
-set -- /var/log/apache2/laravel_access.log '--log-format=%h %^[%x] "%r" %s %b "%R" "%u"' \
+set -- "${LIVE_LOG:-/var/log/apache2/laravel_external_access.log}" '--log-format=%h %^[%x] "%r" %s %b "%R" "%u"' \
   '--datetime-format=%d/%b/%Y:%H:%M:%S %z' \
   --real-time-html --output=/usr/share/nginx/html/live.html \
   --ws-url="${WS_URL:?Set WS_URL to the browser-reachable WebSocket address}" --tz=Africa/Lagos

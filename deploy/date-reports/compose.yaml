@@ -8,6 +8,7 @@ services:
     restart: unless-stopped
     environment:
       WS_URL: ${GOACCESS_WS_URL:-127.0.0.1:7890}
+      LIVE_LOG: ${GOACCESS_LIVE_LOG:-/var/log/apache2/laravel_external_access.log}
     ports:
       - '${MONITOR_BIND:-127.0.0.1}:7891:80'
       - '${MONITOR_BIND:-127.0.0.1}:7890:7890'
