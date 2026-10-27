@@ -81,7 +81,11 @@ handles. Old numbered/date archives and legacy September log backups were remove
 from the monitored directory. Before clearing, all were compressed into a protected
 archive outside that directory:
 `/opt/rms/backups/monitoring-reset-20261027T020248Z/apache-logs.tar.gz`.
-The accompanying `reset.json` lists the exact truncated and removed files.
+The user subsequently requested permanent removal of the archived logs. The
+archive was deleted (22,635,490 bytes), and no compressed archives remain in the
+monitored log directory. It is no longer available for recovery. The accompanying
+`reset.json` records the reset and archive deletion; configuration/image backups
+were retained.
 
 Only the monitoring container was recreated to clear generated reports and API
 cache. Its empty external log successfully generated a zero-request live report.
